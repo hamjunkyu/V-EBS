@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: vebs
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/vebs_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Seoul
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:Jun2512884!}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+    show-sql: true
+
+server:
+  port: 8080
