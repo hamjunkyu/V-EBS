@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import FormRow from "@/components/FormRow";
 
 const TIME_SLOTS = [
   "12:00", "12:25", "12:50", "13:15", "13:40", "14:05", "14:30", "15:00",
@@ -153,24 +154,5 @@ export default function EnrollmentPage() {
         </button>
       </div>
     </main>
-  );
-}
-
-function FormRow({
-  label,
-  children,
-  last = false,
-}: {
-  label: string;
-  children: React.ReactNode;
-  last?: boolean;
-}) {
-  return (
-    <div className={`flex ${last ? "" : "border-b border-gray-300"}`}>
-      <div className="w-44 shrink-0 bg-gray-100 px-4 py-5 font-medium text-center flex items-center justify-center border-r border-gray-300 text-gray-700">
-        {label}
-      </div>
-      <div className="flex-1 px-6 py-5">{children}</div>
-    </div>
   );
 }
