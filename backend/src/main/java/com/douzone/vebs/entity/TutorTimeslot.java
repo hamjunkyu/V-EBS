@@ -21,11 +21,14 @@ public class TutorTimeslot {
     @Column(name = "tutorId", nullable = false, length = 20)
     private String tutorId;
 
-    @Column(name = "dayOfWeek", nullable = false, length = 10)
-    private String dayOfWeek;
+    @Column(name = "dayOfWeek", nullable = false)
+    private Integer dayOfWeek;
 
     @Column(name = "startTime", nullable = false)
     private LocalTime startTime;
+
+    @Column(name = "endTime", nullable = false)
+    private LocalTime endTime;
 
     @Column(name = "regDate", nullable = false, insertable = false, updatable = false)
     private LocalDateTime regDate;
