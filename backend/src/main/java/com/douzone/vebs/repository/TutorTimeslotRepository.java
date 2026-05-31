@@ -12,12 +12,12 @@ public interface TutorTimeslotRepository extends JpaRepository<TutorTimeslot, Lo
 
     @Query("SELECT t FROM TutorTimeslot t " +
             "WHERE t.dayOfWeek IN :dayOfWeeks " +
-            "AND t.startTime <= :reqStart " +
-            "AND t.endTime >= :reqEnd " +
+            "AND t.startTime <= :requestStart " +
+            "AND t.endTime >= :requestEnd " +
             "ORDER BY t.tutorId, t.dayOfWeek")
     List<TutorTimeslot> findAvailableSlots(
             @Param("dayOfWeeks") List<Integer> dayOfWeeks,
-            @Param("reqStart") LocalTime reqStart,
-            @Param("reqEnd") LocalTime reqEnd
+            @Param("requestStart") LocalTime requestStart,
+            @Param("requestEnd") LocalTime requestEnd
     );
 }
