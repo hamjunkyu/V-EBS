@@ -22,4 +22,15 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate
     );
+
+    /**
+     * 기간 내 활성 수업 전체 조회 (가용시간 조회 시 한 번만 조회해 메모리에서 충돌 검사).
+     */
+    @Query("SELECT l FROM Lesson l " +
+            "WHERE l.clsDate BETWEEN :startDate AND :endDate " +
+            "AND l.clsStat IN (1, 2, 5)")
+    List<Lesson> findActiveInPeriod(
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate
+    );
 }

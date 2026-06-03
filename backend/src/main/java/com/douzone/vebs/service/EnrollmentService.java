@@ -58,18 +58,18 @@ public class EnrollmentService {
         List<Integer> lessonDays = getLessonDays(dayPattern);
         LocalDate endDate = calculateEndDate(startDate, dayPattern);
 
+        List<TutorTimeslot> allTutorSlots = tutorRepo.findByDayOfWeeks(lessonDays);
+        List<Lesson> existingLessons = lessonRepo.findActiveInPeriod(startDate, endDate);
+
         List<TimeSlotDto> timeSlots = new ArrayList<>();
         for (LocalTime slotStart : TIME_SLOTS) {
             LocalTime slotEnd = slotStart.plusMinutes(FIXED_DURATION_MIN);
 
-            List<String> candidateTutors = findCandidateTutors(lessonDays, slotStart, slotEnd);
+            List<String> candidateTutors = filterCandidateTutors(allTutorSlots, lessonDays, slotStart, slotEnd);
             if (candidateTutors.isEmpty()) {
                 timeSlots.add(new TimeSlotDto(slotStart, false, null));
                 continue;
             }
-
-            List<Lesson> existingLessons = lessonRepo.findConflictCandidates(
-                    candidateTutors, startDate, endDate);
 
             List<String> availableTutors = new ArrayList<>();
             for (String tutorId : candidateTutors) {
@@ -177,14 +177,22 @@ public class EnrollmentService {
         }
     }
 
-    /**
-     * 시간 슬롯에 가능한 강사 조회 (모든 lessonDays에 가능해야)
-     */
-    private List<String> findCandidateTutors(List<Integer> lessonDays, LocalTime slotStart, LocalTime slotEnd) {
-        List<TutorTimeslot> slots = tutorRepo.findAvailableSlots(lessonDays, slotStart, slotEnd);
+    private LocalDate calculateEndDate(LocalDate startDate, int dayPattern) {
+        List<Integer> lessonDays = getLessonDays(dayPattern);
+        List<LocalDate> lessonDates = generateLessonDates(startDate, lessonDays, LESSON_COUNT);
+        return lessonDates.getLast();
+    }
 
+    /**
+     * 미리 조회한 가용시간 목록에서 해당 슬롯에 가능한 강사를 추린다 (DB 조회 없이 메모리에서 처리).
+     */
+    private List<String> filterCandidateTutors(List<TutorTimeslot> allTutorSlots, List<Integer> lessonDays,
+                                               LocalTime slotStart, LocalTime slotEnd) {
         Map<String, List<TutorTimeslot>> slotsByTutorId = new HashMap<>();
-        for (TutorTimeslot slot : slots) {
+        for (TutorTimeslot slot : allTutorSlots) {
+            if (slot.getStartTime().isAfter(slotStart)) continue;
+            if (slot.getEndTime().isBefore(slotEnd)) continue;
+
             String tutorId = slot.getTutorId();
             if (!slotsByTutorId.containsKey(tutorId)) {
                 slotsByTutorId.put(tutorId, new ArrayList<>());
@@ -221,12 +229,6 @@ public class EnrollmentService {
         return false;
     }
 
-    private LocalDate calculateEndDate(LocalDate startDate, int dayPattern) {
-        List<Integer> lessonDays = getLessonDays(dayPattern);
-        List<LocalDate> lessonDates = generateLessonDates(startDate, lessonDays, LESSON_COUNT);
-        return lessonDates.getLast();
-    }
-
     private List<LocalDate> generateLessonDates(LocalDate startDate, List<Integer> lessonDays, int lessonCount) {
         List<LocalDate> lessonDates = new ArrayList<>();
         LocalDate currentDate = startDate;
@@ -237,5 +239,29 @@ public class EnrollmentService {
             currentDate = currentDate.plusDays(1);
         }
         return lessonDates;
+    }
+
+    /**
+     * 시간 슬롯에 가능한 강사 조회 (모든 lessonDays에 가능해야)
+     */
+    private List<String> findCandidateTutors(List<Integer> lessonDays, LocalTime slotStart, LocalTime slotEnd) {
+        List<TutorTimeslot> slots = tutorRepo.findAvailableSlots(lessonDays, slotStart, slotEnd);
+
+        Map<String, List<TutorTimeslot>> slotsByTutorId = new HashMap<>();
+        for (TutorTimeslot slot : slots) {
+            String tutorId = slot.getTutorId();
+            if (!slotsByTutorId.containsKey(tutorId)) {
+                slotsByTutorId.put(tutorId, new ArrayList<>());
+            }
+            slotsByTutorId.get(tutorId).add(slot);
+        }
+
+        List<String> candidates = new ArrayList<>();
+        for (Map.Entry<String, List<TutorTimeslot>> entry : slotsByTutorId.entrySet()) {
+            if (entry.getValue().size() == lessonDays.size()) {
+                candidates.add(entry.getKey());
+            }
+        }
+        return candidates;
     }
 }
