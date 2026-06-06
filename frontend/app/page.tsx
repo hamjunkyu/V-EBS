@@ -1,22 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import FormRow from "@/components/FormRow";
 
-const TIME_SLOTS = [
-  "12:00", "12:25", "12:50", "13:15", "13:40", "14:05", "14:30", "15:00",
-  "15:25", "15:50", "16:15", "16:40", "17:05", "17:30", "18:00", "18:25",
-  "18:50", "19:20", "19:45", "20:10", "20:35", "21:00", "21:25", "21:50",
-  "22:15", "22:40",
-];
-
-const UNAVAILABLE_SLOTS = ["12:00", "13:40", "17:05", "22:15", "22:40"];
-
 const COURSES = [
-  { value: "smart-phonics", label: "스마트파닉스" },
-  { value: "travel-english", label: "여행영어" },
-  { value: "free-talking", label: "프리토킹" },
+  { value: "smart-phonics", label: "스마트파닉스", courseType: 1 },
+  { value: "travel-english", label: "여행영어", courseType: 2 },
+  { value: "free-talking", label: "프리토킹", courseType: 3 },
 ];
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
+
+type TimeSlot = {
+  time: string;
+  available: boolean;
+  assignedTutorId: string | null;
+};
+
+type SubmitResult =
+  | { type: "success"; tutorId: string; endDate: string; lessonCount: number }
+  | { type: "error"; message: string };
 
 function getDateString(daysFromNow: number) {
   const date = new Date();
@@ -24,35 +27,105 @@ function getDateString(daysFromNow: number) {
   return date.toISOString().split("T")[0];
 }
 
-function formatShortDate(iso: string) {
-  const [, m, d] = iso.split("-");
-  return `${Number(m)}/${Number(d)}`;
-}
-
 export default function EnrollmentPage() {
   const [course, setCourse] = useState("travel-english");
   const [daySchedule, setDaySchedule] = useState("mon-wed-fri");
   const [startDate, setStartDate] = useState("");
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<SubmitResult | null>(null);
 
-  const minDate = getDateString(1);
-  const maxDate = getDateString(7);
+  const loadTimeSlots = useCallback(async () => {
+    if (!startDate) {
+      setTimeSlots([]);
+      setError(null);
+      return;
+    }
+
+    const dayPattern = daySchedule === "mon-wed-fri" ? 1 : 2;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/attendance/available-times?dayPattern=${dayPattern}&startDate=${startDate}`
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message ?? "조회에 실패했습니다");
+      }
+      setTimeSlots(data);
+    } catch (e) {
+      setError((e as Error).message);
+      setTimeSlots([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [daySchedule, startDate]);
+
+  useEffect(() => {
+    setSelectedTime(null);
+    loadTimeSlots();
+  }, [loadTimeSlots]);
+
+  const minDate = getDateString(0);     // 오늘
+  const maxDate = getDateString(365);   // 1년 후
 
   const canSubmit = startDate !== "" && selectedTime !== null;
 
-  const handleSubmit = () => {
-    const courseLabel = COURSES.find((c) => c.value === course)?.label;
-    const dayLabel = daySchedule === "mon-wed-fri" ? "월 수 금" : "화 목";
-    alert(
-      `수강신청이 완료되었습니다.\n\n과정: ${courseLabel}\n수업요일: ${dayLabel}\n시작일: ${startDate}\n시간: ${selectedTime}`
-    );
+  const handleSubmit = async () => {
+    const dayPattern = daySchedule === "mon-wed-fri" ? 1 : 2;
+    const courseType = COURSES.find((c) => c.value === course)!.courseType;
+
+    setSubmitting(true);
+    setResult(null);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/attendance`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentId: "stu100",
+          studentSeq: 9999,
+          startDate,
+          dayPattern,
+          courseType,
+          startTime: selectedTime,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message ?? "신청에 실패했습니다");
+      }
+
+      setResult({
+        type: "success",
+        tutorId: data.assignedTutorId,
+        endDate: data.endDate,
+        lessonCount: data.lessonCount,
+      });
+      setSelectedTime(null);
+      loadTimeSlots();
+    } catch (e) {
+      setResult({ type: "error", message: (e as Error).message });
+    } finally {
+      setSubmitting(false);
+    }
   };
+
 
   const handleCancel = () => {
     setCourse("travel-english");
     setDaySchedule("mon-wed-fri");
     setStartDate("");
     setSelectedTime(null);
+    setResult(null);
   };
 
   const inputClass = "min-w-[220px] px-3 py-2 border border-gray-400 rounded bg-white text-sm";
@@ -63,7 +136,7 @@ export default function EnrollmentPage() {
       <hr className="border-gray-300 mb-4" />
       <p className="text-sky-500 text-sm mb-8">※ 첫 수업은 레벨테스트로 진행됩니다.</p>
 
-      <div className="border border-gray-300">
+      <div className="border border-gray-300 w-[920px] max-w-full">
         <FormRow label="과정">
           <div className="flex items-center gap-2">
             <select
@@ -105,34 +178,42 @@ export default function EnrollmentPage() {
             className={inputClass}
           />
           <p className="text-xs text-gray-500 mt-2">
-            내일부터 7일 후까지 선택 가능합니다. ({formatShortDate(minDate)} ~ {formatShortDate(maxDate)})
+            오늘부터 1년 후까지 선택 가능합니다.
           </p>
         </FormRow>
 
         <FormRow label="수업시간 선택" last>
-          <div className="inline-grid grid-cols-8 border-t border-l border-gray-300">
-            {TIME_SLOTS.map((time) => {
-              const isUnavailable = UNAVAILABLE_SLOTS.includes(time);
-              const isSelected = selectedTime === time;
-              return (
-                <button
-                  key={time}
-                  type="button"
-                  disabled={isUnavailable}
-                  onClick={() => setSelectedTime(time)}
-                  className={`w-[90px] py-3 text-sm text-center border-r border-b border-gray-300 ${
-                    isUnavailable
-                      ? "text-gray-500 line-through cursor-not-allowed"
-                      : isSelected
-                        ? "bg-amber-500 text-white"
-                        : "text-amber-500 hover:bg-amber-50 cursor-pointer"
-                  }`}
-                >
-                  {time}
-                </button>
-              );
-            })}
-          </div>
+          {!startDate ? (
+            <p className="text-sm text-gray-500">수업 시작일을 먼저 선택해주세요.</p>
+          ) : loading ? (
+            <p className="text-sm text-gray-500">가능 시간을 조회하고 있습니다...</p>
+          ) : error ? (
+            <p className="text-sm text-red-500">{error}</p>
+          ) : (
+            <div className="inline-grid grid-cols-[repeat(8,90px)] border-l border-t border-gray-300">
+              {timeSlots.map((slot) => {
+                const isUnavailable = !slot.available;
+                const isSelected = selectedTime === slot.time;
+                return (
+                  <button
+                    key={slot.time}
+                    type="button"
+                    disabled={isUnavailable}
+                    onClick={() => setSelectedTime(slot.time)}
+                    className={`py-3 text-sm text-center border-r border-b border-gray-300 ${
+                      isUnavailable
+                        ? "bg-white text-gray-500 line-through cursor-not-allowed"
+                        : isSelected
+                          ? "bg-amber-500 text-white cursor-pointer"
+                          : "bg-white text-amber-500 hover:bg-amber-50 cursor-pointer"
+                    }`}
+                  >
+                    {slot.time}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </FormRow>
       </div>
 
@@ -140,10 +221,10 @@ export default function EnrollmentPage() {
         <button
           type="button"
           onClick={handleSubmit}
-          disabled={!canSubmit}
+          disabled={!canSubmit || submitting}
           className="bg-sky-500 text-white px-16 py-3 rounded font-semibold hover:bg-sky-600 cursor-pointer disabled:bg-gray-300 disabled:cursor-not-allowed disabled:hover:bg-gray-300"
         >
-          신 청
+          {submitting ? "신청 중..." : "신 청"}
         </button>
         <button
           type="button"
@@ -153,6 +234,53 @@ export default function EnrollmentPage() {
           취 소
         </button>
       </div>
+
+      {result && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => setResult(null)}
+        >
+          <div
+            className="mx-4 w-full max-w-sm rounded-lg bg-white p-6 text-center shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {result.type === "success" ? (
+              <>
+                <p className="text-lg font-semibold text-sky-600">신청 완료</p>
+                <div className="mx-auto mt-4 w-fit space-y-2 text-sm text-gray-700">
+                  <div className="flex">
+                    <span className="w-16 text-left text-gray-500">배정 강사</span>
+                    <span className="px-2 text-gray-400">:</span>
+                    <span className="font-medium text-gray-800">{result.tutorId}</span>
+                  </div>
+                  <div className="flex">
+                    <span className="w-16 text-left text-gray-500">수업 기간</span>
+                    <span className="px-2 text-gray-400">:</span>
+                    <span className="text-gray-800">{startDate} ~ {result.endDate}</span>
+                  </div>
+                  <div className="flex">
+                    <span className="w-16 text-left text-gray-500">총 수업</span>
+                    <span className="px-2 text-gray-400">:</span>
+                    <span className="text-gray-800">{result.lessonCount}회</span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-lg font-semibold text-red-500">신청 실패</p>
+                <p className="mt-3 text-sm text-gray-700">{result.message}</p>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={() => setResult(null)}
+              className="mt-6 rounded bg-sky-500 px-8 py-2 text-sm font-semibold text-white hover:bg-sky-600 cursor-pointer"
+            >
+              확인
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
