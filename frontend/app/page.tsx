@@ -18,7 +18,7 @@ type TimeSlot = {
 };
 
 type SubmitResult =
-  | { type: "success"; tutorId: string; endDate: string; lessonCount: number }
+  | { type: "success"; tutorId: string; startTime: string; endDate: string; lessonCount: number }
   | { type: "error"; message: string };
 
 function getDateString(daysFromNow: number) {
@@ -107,6 +107,7 @@ export default function EnrollmentPage() {
       setResult({
         type: "success",
         tutorId: data.assignedTutorId,
+        startTime: selectedTime!,
         endDate: data.endDate,
         lessonCount: data.lessonCount,
       });
@@ -257,6 +258,11 @@ export default function EnrollmentPage() {
                     <span className="w-16 text-left text-gray-500">수업 기간</span>
                     <span className="px-2 text-gray-400">:</span>
                     <span className="text-gray-800">{startDate} ~ {result.endDate}</span>
+                  </div>
+                  <div className="flex">
+                    <span className="w-16 text-left text-gray-500">수업 시간</span>
+                    <span className="px-2 text-gray-400">:</span>
+                    <span className="text-gray-800">{result.startTime}</span>
                   </div>
                   <div className="flex">
                     <span className="w-16 text-left text-gray-500">총 수업</span>
